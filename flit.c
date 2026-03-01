@@ -173,8 +173,8 @@ void editorFreeExplorer(void);
 /// @param s error message
 void fail(const char *s) {
   // Clear terminal
-  write(STDOUT_FILENO, "\x1b[2J", 4);
-  write(STDERR_FILENO, "\x1b[H", 3);
+  (void)write(STDOUT_FILENO, "\x1b[2J", 4);
+  (void)write(STDERR_FILENO, "\x1b[H", 3);
 
   perror(s); // Print error message
   exit(1);
@@ -1199,9 +1199,8 @@ void editorDrawRows(struct abuf *ab) {
       int current_color = -1;
 
       // margin line numbers
-      char margin[7];
-      margin[6] = '\0';                  // Null terminate
-      sprintf(margin, "%4d| ", filerow); // padding
+      char margin[16];
+      snprintf(margin, sizeof(margin), "%4d| ", filerow); // padding
       abAppend(ab, margin, 6);
 
       int j;
@@ -1316,7 +1315,7 @@ void editorRefreshScreen(void) {
 
   abAppend(&ab, "\x1b[?25h", 6);
 
-  write(STDOUT_FILENO, ab.b, ab.len);
+  (void)write(STDOUT_FILENO, ab.b, ab.len);
   abFree(&ab);
 }
 
@@ -1432,8 +1431,8 @@ void editorHandleKeyPress(void) {
       free(E.copy_buffer);
     }
     editorFreeExplorer();
-    write(STDOUT_FILENO, "\x1b[2J", 4);
-    write(STDERR_FILENO, "\x1b[H", 3);
+    (void)write(STDOUT_FILENO, "\x1b[2J", 4);
+    (void)write(STDERR_FILENO, "\x1b[H", 3);
 
     exit(0);
     break;
@@ -1596,7 +1595,7 @@ int main(int argc, char *argv[]) {
   FILE *tree_check = popen("which tree 2>/dev/null", "r");
   char tree_path[256] = {0};
   if (tree_check) {
-    fgets(tree_path, sizeof(tree_path), tree_check);
+    (void)fgets(tree_path, sizeof(tree_path), tree_check);
     pclose(tree_check);
   }
   if (tree_path[0] == '\0') {
