@@ -19,9 +19,12 @@
 
 /*** defines ***/
 
-#define VERSION "0.2.3"
+#define VERSION "0.3.0"
+#define HELP_MESSAGE                                                           \
+  "HELP: Ctrl+(H=help | S=save | F=find | A=select | E=explore | Q=quit)"
 #define TAB_STOP 8
 #define MARGIN 6
+#define EXPLORER_WIDTH 30
 
 #define CTRL_KEY(k)                                                            \
   ((k) & 0x1f) // Set upper 3 bits of char to 0. Sameas CTRL key
@@ -97,6 +100,11 @@ struct editorConfig {
 
   struct editorSyntax *syntax;
   struct termios old_termios;
+
+  int explorer_open;
+  char **explorer_lines;
+  int explorer_num_lines;
+  int explorer_scroll;
 };
 
 struct editorConfig E;
@@ -156,6 +164,8 @@ void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen(void);
 void editorDropCursor(void);
 char *editorPrompt(char *promt, void (*callback)(char *, int));
+void editorToggleExplorer(void);
+void editorFreeExplorer(void);
 
 /*** terminal ***/
 
@@ -690,7 +700,7 @@ void editorDeleteChar(void) {
 }
 
 void editorStartSelecting(void) {
-  editorSetStatusMessage("Selection: Use Arrows | Ctrl-E");
+  editorSetStatusMessage("Selection: Use Arrows | Ctrl-A to stop");
   E.selecting = 1;
   editorDropCursor();
 }
@@ -787,7 +797,7 @@ void editorSelectionCopy(void) {
 
   } else {
     // Display message.
-    editorSetStatusMessage("Copy failed: No selection (Ctrl-E & Arrow Keys)");
+    editorSetStatusMessage("Copy failed: No selection (Ctrl-A & Arrow Keys)");
   }
 
   editorStopSelecting(); // Once copied, no need to be selecting anymore
@@ -1010,6 +1020,72 @@ void editorFind(void) {
   }
 }
 
+/*** explorer ***/
+
+int explorerWidth(void) { return E.explorer_open ? EXPLORER_WIDTH : 0; }
+
+void editorFreeExplorer(void) {
+  if (E.explorer_lines) {
+    for (int i = 0; i < E.explorer_num_lines; i++)
+      free(E.explorer_lines[i]);
+    free(E.explorer_lines);
+    E.explorer_lines = NULL;
+  }
+  E.explorer_num_lines = 0;
+}
+
+void editorLoadExplorer(void) {
+  editorFreeExplorer();
+
+  FILE *fp = popen("tree -n --condense --noreport 2>/dev/null", "r");
+  if (!fp) {
+    editorSetStatusMessage("Explorer: failed to run tree");
+    E.explorer_open = 0;
+    return;
+  }
+
+  int capacity = 64;
+  E.explorer_lines = malloc(capacity * sizeof(char *));
+  if (!E.explorer_lines) {
+    pclose(fp);
+    E.explorer_open = 0;
+    return;
+  }
+
+  char line[1024];
+  while (fgets(line, sizeof(line), fp)) {
+    int len = strlen(line);
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+      line[--len] = '\0';
+    if (E.explorer_num_lines >= capacity) {
+      capacity *= 2;
+      E.explorer_lines = realloc(E.explorer_lines, capacity * sizeof(char *));
+      if (!E.explorer_lines)
+        break;
+    }
+    E.explorer_lines[E.explorer_num_lines++] = strdup(line);
+  }
+  pclose(fp);
+
+  if (E.explorer_num_lines == 0) {
+    editorSetStatusMessage("Explorer: 'tree' command returned no output");
+    E.explorer_open = 0;
+    free(E.explorer_lines);
+    E.explorer_lines = NULL;
+  }
+}
+
+void editorToggleExplorer(void) {
+  E.explorer_open = !E.explorer_open;
+  if (E.explorer_open) {
+    editorLoadExplorer();
+    if (E.explorer_open)
+      editorSetStatusMessage("Explorer opened (Ctrl-E to close)");
+  } else {
+    editorSetStatusMessage("Explorer closed");
+  }
+}
+
 /*** append buffer ***/
 
 struct abuf {
@@ -1048,8 +1124,8 @@ void editorScroll(void) {
   if (E.rx < E.coloff) {
     E.coloff = E.rx;
   }
-  if (E.rx >= E.coloff + (E.screencols - MARGIN)) {
-    E.coloff = E.rx - (E.screencols - MARGIN) + 1;
+  if (E.rx >= E.coloff + (E.screencols - MARGIN - explorerWidth())) {
+    E.coloff = E.rx - (E.screencols - MARGIN - explorerWidth()) + 1;
   }
 }
 
@@ -1057,17 +1133,49 @@ void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
     int filerow = y + E.rowoff;
+    int ew = explorerWidth();
+
+    // Draw explorer panel on the left when open
+    if (E.explorer_open) {
+      int exp_row = y + E.explorer_scroll;
+      int content_w = EXPLORER_WIDTH - 1; // 29 chars content + 1 separator
+      abAppend(ab, "\x1b[90m", 5);        // dark gray
+      if (exp_row < E.explorer_num_lines) {
+        char *ln = E.explorer_lines[exp_row];
+        // Walk byte-by-byte counting terminal columns (not bytes).
+        // UTF-8 continuation bytes (10xxxxxx) don't add a column.
+        int byte_len = 0;
+        int display_w = 0;
+        while (ln[byte_len] != '\0') {
+          if (((unsigned char)ln[byte_len] & 0xC0) != 0x80) {
+            if (display_w >= content_w)
+              break;
+            display_w++;
+          }
+          byte_len++;
+        }
+        abAppend(ab, ln, byte_len);
+        for (int p = display_w; p < content_w; p++)
+          abAppend(ab, " ", 1);
+      } else {
+        for (int p = 0; p < content_w; p++)
+          abAppend(ab, " ", 1);
+      }
+      abAppend(ab, "\x1b[m", 3);
+      abAppend(ab, "\xe2\x94\x82", 3); // │ separator (U+2502)
+    }
 
     if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80]; // Welcome message buffer
         int welcomelen = snprintf(welcome, sizeof(welcome),
                                   "Flit editor -- version %s", VERSION);
-        if (welcomelen > E.screencols)
-          welcomelen = E.screencols;
+        int avail = E.screencols - ew;
+        if (welcomelen > avail)
+          welcomelen = avail;
 
         // Padding
-        int padding = (E.screencols - welcomelen) / 2;
+        int padding = (avail - welcomelen) / 2;
         if (padding) {
           abAppend(ab, "~", 1);
           padding--;
@@ -1083,8 +1191,8 @@ void editorDrawRows(struct abuf *ab) {
       int len = E.row[filerow].rsize - E.coloff;
       if (len < 0)
         len = 0;
-      if (len > (E.screencols - MARGIN))
-        len = (E.screencols - MARGIN);
+      if (len > (E.screencols - MARGIN - ew))
+        len = (E.screencols - MARGIN - ew);
 
       char *c = &E.row[filerow].render[E.coloff];
       unsigned char *hl = &E.row[filerow].hl[E.coloff];
@@ -1203,7 +1311,7 @@ void editorRefreshScreen(void) {
 
   char buf[32];
   snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
-           (E.rx - E.coloff) + 1 + MARGIN); // Cursor position
+           (E.rx - E.coloff) + 1 + MARGIN + explorerWidth()); // Cursor position
   abAppend(&ab, buf, strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -1323,6 +1431,7 @@ void editorHandleKeyPress(void) {
     if (E.copy_buffer != NULL) {
       free(E.copy_buffer);
     }
+    editorFreeExplorer();
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDERR_FILENO, "\x1b[H", 3);
 
@@ -1338,11 +1447,19 @@ void editorHandleKeyPress(void) {
     break;
 
   case CTRL_KEY('e'):
+    editorToggleExplorer();
+    break;
+
+  case CTRL_KEY('a'):
     if (E.selecting) {
       editorStopSelecting();
     } else {
       editorStartSelecting();
     }
+    break;
+
+  case CTRL_KEY('h'):
+    editorSetStatusMessage(HELP_MESSAGE);
     break;
 
   case CTRL_KEY('c'):
@@ -1358,7 +1475,6 @@ void editorHandleKeyPress(void) {
     break;
 
   case BACKSPACE:
-  case CTRL_KEY('h'):
   case DEL:
     if (E.selecting) {
       editorSelectionDelete();
@@ -1465,12 +1581,30 @@ void initEditor(void) {
   E.copy_buffer = NULL;
   E.copy_buffer_len = 0;
 
+  E.explorer_open = 0;
+  E.explorer_lines = NULL;
+  E.explorer_num_lines = 0;
+  E.explorer_scroll = 0;
+
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     fail("getWindowSize");
   E.screenrows -= 2;
 }
 
 int main(int argc, char *argv[]) {
+  // Verify tree dependency
+  FILE *tree_check = popen("which tree 2>/dev/null", "r");
+  char tree_path[256] = {0};
+  if (tree_check) {
+    fgets(tree_path, sizeof(tree_path), tree_check);
+    pclose(tree_check);
+  }
+  if (tree_path[0] == '\0') {
+    fprintf(stderr,
+            "flit: requires 'tree' command. Install with: brew install tree\n");
+    exit(1);
+  }
+
   enableRawMode();
   initEditor();
 
@@ -1478,7 +1612,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-Q = quit");
+  editorSetStatusMessage(HELP_MESSAGE);
 
   while (1) {
     editorRefreshScreen();

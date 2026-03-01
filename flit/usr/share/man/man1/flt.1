@@ -1,0 +1,105 @@
+.TH FLT 1 "2026-03-01" "Flit 0.3.0" "User Commands"
+.SH NAME
+flt \- a lightweight terminal text editor
+.SH SYNOPSIS
+.B flt
+.RI [ file ]
+.SH DESCRIPTION
+.B flt
+is a small, fast terminal text editor built upon
+.BR kilo (1).
+It operates in raw terminal mode and requires no configuration files.
+Features include syntax highlighting for C, Python, and Markdown; line
+numbers; text selection; copy and paste; and a built-in file explorer.
+.PP
+If
+.I file
+is given,
+.B flt
+opens it for editing. If the file does not exist it will be created on
+save. If no file is given,
+.B flt
+opens with an empty buffer.
+.SH KEY BINDINGS
+.SS Navigation
+.TP
+.B Arrow keys
+Move the cursor one character or line.
+.TP
+.BR "Page Up" ", " "Page Down"
+Scroll one screen up or down.
+.SS Editing
+.TP
+.B Enter
+Insert a newline.
+.TP
+.B Backspace ", " Delete
+Delete the character before / under the cursor. If a selection is
+active, delete the selected text instead.
+.TP
+.B Tab
+Insert a tab character. When a selection is active, prompt for an
+indent direction: press
+.B i
+to indent the selected lines or
+.B u
+to unindent them.
+.SS File
+.TP
+.B Ctrl\-S
+Save the current buffer to disk. If no filename is associated with the
+buffer, you will be prompted to enter one.
+.TP
+.B Ctrl\-Q
+Quit
+.BR flt .
+.SS Search
+.TP
+.B Ctrl\-F
+Open an incremental search prompt. Type to search; use the arrow keys
+to move between matches. Press
+.B Enter
+or
+.B Escape
+to return to editing.
+.SS Selection
+.TP
+.B Ctrl\-A
+Toggle selection mode. When selection mode is on, cursor movement
+extends the selected region.
+.TP
+.B Ctrl\-C
+Copy the current selection into the internal clipboard.
+.TP
+.B Ctrl\-V
+Paste the clipboard contents at the cursor. If a selection is active it
+is replaced by the pasted text.
+.SS Explorer
+.TP
+.B Ctrl\-E
+Toggle the file explorer panel. Use the arrow keys to navigate and
+.B Enter
+to open a file.
+.SS Miscellaneous
+.TP
+.B Ctrl\-H
+Display a brief help reminder in the status bar.
+.SH SYNTAX HIGHLIGHTING
+.B flt
+detects the file type from the file extension and applies highlighting
+automatically.
+.TS
+l l.
+Extension	Language
+\&.c .h .cpp	C / C++
+\&.py	Python
+\&.md	Markdown
+.TE
+.SH AUTHOR
+Written by Josh. Built upon
+.I kilo
+by antirez, following the guide at
+.IR https://viewsourcecode.org/snaptoken/kilo/ .
+.SH SEE ALSO
+.BR vi (1),
+.BR nano (1)

@@ -1,0 +1,82 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Import GPG key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Get version
+        run: |
+          echo "VERSION=$(grep '^Version:' flit/DEBIAN/control | awk '{print $2}')" >> $GITHUB_ENV
+
+      - name: Build .deb
+        run: make deb
+
+      # Check out the existing gh-pages branch into apt-repo/.
+      # continue-on-error so the first run (no gh-pages yet) doesn't fail.
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: apt-repo
+        continue-on-error: true
+
+      # Ensure the directory layout exists whether or not the checkout above succeeded.
+      - name: Ensure APT repo structure
+        run: |
+          mkdir -p apt-repo/pool/main apt-repo/dists/stable/main/binary-amd64
+          touch apt-repo/.nojekyll
+
+      - name: Build APT index
+        run: |
+          cp flt_${VERSION}_amd64.deb apt-repo/pool/main/
+          cd apt-repo
+          dpkg-scanpackages --arch amd64 pool > dists/stable/main/binary-amd64/Packages
+          gzip -kf dists/stable/main/binary-amd64/Packages
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=flit \
+            -o APT::FTPArchive::Release::Label=flit \
+            -o APT::FTPArchive::Release::Suite=stable \
+            -o APT::FTPArchive::Release::Codename=stable \
+            -o APT::FTPArchive::Release::Architectures=amd64 \
+            -o APT::FTPArchive::Release::Components=main \
+            release dists/stable > dists/stable/Release
+          gpg --default-key "Flit APT Repository" --armor --detach-sign \
+            -o dists/stable/Release.gpg dists/stable/Release
+          gpg --default-key "Flit APT Repository" --armor --clearsign \
+            -o dists/stable/InRelease dists/stable/Release
+          cp ../flit.gpg flit.gpg
+
+      # Deploy apt-repo/ to the gh-pages branch.
+      # keep_files: true preserves old .deb files in pool/ across releases.
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./apt-repo
+          publish_branch: gh-pages
+          keep_files: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: flt_${{ env.VERSION }}_amd64.deb
