@@ -9,6 +9,7 @@ The decision to complete a step-by-step guide rather than just fork the kilo rep
 -   Line numbers
 -   Selection
 -   Copy & Paste
+-   Explorer
 
 # Release
 I have wanted to experiment with releasing my own Debian package for a while, and as I genuinely use Flit day-to-day I figured I'd make a package for the program and release it to learn about the publishing & maintenance workflows.
