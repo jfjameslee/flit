@@ -1,0 +1,7 @@
+flit (0.3.0) unstable; urgency=low
+
+  * Explorer mode: interactive directory tree navigation.
+  * Improved Python syntax highlighting.
+  * Fix compiler warnings; add .gitignore.
+
+ -- jfjameslee <68633670+jfjameslee@users.noreply.github.com>  Sun, 01 Mar 2026 00:00:00 +0000
