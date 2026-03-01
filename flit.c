@@ -50,6 +50,7 @@ enum editorHighlight {
 
 #define HL_HIGHLIGHT_NUMBERS (1 << 0)
 #define HL_HIGHLIGHT_STRINGS (1 << 1)
+#define HL_HIGHLIGHT_STRING_PREFIXES (1 << 2)
 
 /*** data ***/
 
@@ -115,21 +116,38 @@ char *MD_HL_keywords[] = {"#|", NULL};
 
 char *PY_HL_extensions[] = {".py", NULL};
 char *PY_HL_keywords[] = {
-    "if",         "else",   "elif",    "for",    "while",  "break",  "continue",
-    "try",        "except", "finally", "with",   "as",     "pass",   "raise",
-    "yield",      "return", "TRUE",    "FALSE",  "None",   "and",    "or",
-    "not",        "in",     "is",      "lambda",
+    /* Control flow */
+    "if", "elif", "else", "for", "while", "break", "continue",
+    "try", "except", "finally", "with", "as", "pass", "raise",
+    "yield", "return", "and", "or", "not", "in", "is", "lambda",
+    /* Structure */
+    "def", "class", "import", "from", "global", "nonlocal", "del",
+    "assert", "async", "await",
+    /* Literals */
+    "True", "False", "None",
 
-    "int|",       "float|", "list|",   "tuple|", "range|", "str|",   "dict|",
-    "set|",       "bool|",  "len|",    "type|",  "print|", "input|", "open|",
-    "enumerate|", NULL};
+    /* Built-in types */
+    "int|", "float|", "complex|", "str|", "bytes|", "bytearray|",
+    "list|", "tuple|", "dict|", "set|", "frozenset|", "bool|",
+    "range|", "type|", "object|",
+    /* Built-in functions */
+    "abs|", "all|", "any|", "ascii|", "bin|", "callable|", "chr|",
+    "classmethod|", "compile|", "delattr|", "dir|", "divmod|",
+    "enumerate|", "eval|", "exec|", "filter|", "format|",
+    "getattr|", "globals|", "hasattr|", "hash|", "help|", "hex|",
+    "id|", "input|", "isinstance|", "issubclass|", "iter|",
+    "len|", "locals|", "map|", "max|", "min|", "next|",
+    "oct|", "open|", "ord|", "pow|", "print|", "property|",
+    "repr|", "reversed|", "round|", "setattr|", "slice|",
+    "sorted|", "staticmethod|", "sum|", "super|",
+    "vars|", "zip|", NULL};
 
 struct editorSyntax HLDB[] = {
     {"c", C_HL_extensions, C_HL_keywords, "//", "/*", "*/",
      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
     {"md", MD_HL_extensions, MD_HL_keywords, NULL, "<!--", "-->", 0},
     {"py", PY_HL_extensions, PY_HL_keywords, "#", NULL, NULL,
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS}};
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_STRING_PREFIXES}};
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0])) // Length of HLDB array
 
@@ -276,7 +294,7 @@ int getWindowSize(int *rows, int *cols) {
 /** syntax highlighting ***/
 
 int is_separator(int c) {
-  return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
+  return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];{}:@", c) != NULL;
 }
 
 void editorUpdateSyntax(erow *row) {
@@ -335,6 +353,34 @@ void editorUpdateSyntax(erow *row) {
       }
     }
 
+    /* Highlight Python-style string prefixes: f"", b"", r"", u"", rb"", etc. */
+    if ((E.syntax->flags & HL_HIGHLIGHT_STRING_PREFIXES) && !in_string && prev_sep) {
+      int is_prefix = (c == 'f' || c == 'b' || c == 'r' || c == 'u' ||
+                       c == 'F' || c == 'B' || c == 'R' || c == 'U');
+      if (is_prefix && i + 1 < row->rsize) {
+        char next = row->render[i + 1];
+        if (next == '"' || next == '\'') {
+          row->hl[i] = HL_STRING;
+          i++;
+          prev_sep = 0;
+          continue;
+        }
+        /* Two-letter prefix: rb"", br"", fr"", rf"", etc. */
+        int next_is_prefix = (next == 'f' || next == 'b' || next == 'r' ||
+                              next == 'F' || next == 'B' || next == 'R');
+        if (next_is_prefix && i + 2 < row->rsize) {
+          char after = row->render[i + 2];
+          if (after == '"' || after == '\'') {
+            row->hl[i] = HL_STRING;
+            row->hl[i + 1] = HL_STRING;
+            i += 2;
+            prev_sep = 0;
+            continue;
+          }
+        }
+      }
+    }
+
     /* If String syntax flag set, highlight strings & characters */
     if (E.syntax->flags & HL_HIGHLIGHT_STRINGS) {
       if (in_string) {
@@ -363,8 +409,8 @@ void editorUpdateSyntax(erow *row) {
 
     /* If Number syntax flag set, highlight numbers */
     if (E.syntax->flags & HL_HIGHLIGHT_NUMBERS) {
-      if (isdigit(c) && (prev_sep || prev_hl == HL_NUMBER ||
-                         (c == '.' && prev_hl == HL_NUMBER))) {
+      if ((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) ||
+          (c == '.' && prev_hl == HL_NUMBER)) {
         row->hl[i] = HL_NUMBER;
         i++;
         prev_sep = 0;
