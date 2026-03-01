@@ -19,7 +19,7 @@
 
 /*** defines ***/
 
-#define VERSION "0.2.2"
+#define VERSION "0.2.3"
 #define TAB_STOP 8
 #define MARGIN 6
 
@@ -117,37 +117,36 @@ char *MD_HL_keywords[] = {"#|", NULL};
 char *PY_HL_extensions[] = {".py", NULL};
 char *PY_HL_keywords[] = {
     /* Control flow */
-    "if", "elif", "else", "for", "while", "break", "continue",
-    "try", "except", "finally", "with", "as", "pass", "raise",
-    "yield", "return", "and", "or", "not", "in", "is", "lambda",
+    "if", "elif", "else", "for", "while", "break", "continue", "try", "except",
+    "finally", "with", "as", "pass", "raise", "yield", "return", "and", "or",
+    "not", "in", "is", "lambda",
     /* Structure */
-    "def", "class", "import", "from", "global", "nonlocal", "del",
-    "assert", "async", "await",
+    "def", "class", "import", "from", "global", "nonlocal", "del", "assert",
+    "async", "await",
     /* Literals */
     "True", "False", "None",
 
     /* Built-in types */
-    "int|", "float|", "complex|", "str|", "bytes|", "bytearray|",
-    "list|", "tuple|", "dict|", "set|", "frozenset|", "bool|",
-    "range|", "type|", "object|",
+    "int|", "float|", "complex|", "str|", "bytes|", "bytearray|", "list|",
+    "tuple|", "dict|", "set|", "frozenset|", "bool|", "range|", "type|",
+    "object|",
     /* Built-in functions */
     "abs|", "all|", "any|", "ascii|", "bin|", "callable|", "chr|",
-    "classmethod|", "compile|", "delattr|", "dir|", "divmod|",
-    "enumerate|", "eval|", "exec|", "filter|", "format|",
-    "getattr|", "globals|", "hasattr|", "hash|", "help|", "hex|",
-    "id|", "input|", "isinstance|", "issubclass|", "iter|",
-    "len|", "locals|", "map|", "max|", "min|", "next|",
-    "oct|", "open|", "ord|", "pow|", "print|", "property|",
-    "repr|", "reversed|", "round|", "setattr|", "slice|",
-    "sorted|", "staticmethod|", "sum|", "super|",
-    "vars|", "zip|", NULL};
+    "classmethod|", "compile|", "delattr|", "dir|", "divmod|", "enumerate|",
+    "eval|", "exec|", "filter|", "format|", "getattr|", "globals|", "hasattr|",
+    "hash|", "help|", "hex|", "id|", "input|", "isinstance|", "issubclass|",
+    "iter|", "len|", "locals|", "map|", "max|", "min|", "next|", "oct|",
+    "open|", "ord|", "pow|", "print|", "property|", "repr|", "reversed|",
+    "round|", "setattr|", "slice|", "sorted|", "staticmethod|", "sum|",
+    "super|", "vars|", "zip|", NULL};
 
 struct editorSyntax HLDB[] = {
     {"c", C_HL_extensions, C_HL_keywords, "//", "/*", "*/",
      HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS},
     {"md", MD_HL_extensions, MD_HL_keywords, NULL, "<!--", "-->", 0},
     {"py", PY_HL_extensions, PY_HL_keywords, "#", NULL, NULL,
-     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_STRING_PREFIXES}};
+     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS |
+         HL_HIGHLIGHT_STRING_PREFIXES}};
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0])) // Length of HLDB array
 
@@ -354,7 +353,8 @@ void editorUpdateSyntax(erow *row) {
     }
 
     /* Highlight Python-style string prefixes: f"", b"", r"", u"", rb"", etc. */
-    if ((E.syntax->flags & HL_HIGHLIGHT_STRING_PREFIXES) && !in_string && prev_sep) {
+    if ((E.syntax->flags & HL_HIGHLIGHT_STRING_PREFIXES) && !in_string &&
+        prev_sep) {
       int is_prefix = (c == 'f' || c == 'b' || c == 'r' || c == 'u' ||
                        c == 'F' || c == 'B' || c == 'R' || c == 'U');
       if (is_prefix && i + 1 < row->rsize) {
