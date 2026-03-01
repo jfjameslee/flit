@@ -20,6 +20,8 @@
 /*** defines ***/
 
 #define VERSION "0.3.0"
+#define HELP_MESSAGE                                                           \
+  "HELP: Ctrl+(H=help | S=save | F=find | A=select | E=explore | Q=quit)"
 #define TAB_STOP 8
 #define MARGIN 6
 #define EXPLORER_WIDTH 30
@@ -1035,7 +1037,7 @@ void editorFreeExplorer(void) {
 void editorLoadExplorer(void) {
   editorFreeExplorer();
 
-  FILE *fp = popen("tree -n --noreport 2>/dev/null", "r");
+  FILE *fp = popen("tree -n --condense --noreport 2>/dev/null", "r");
   if (!fp) {
     editorSetStatusMessage("Explorer: failed to run tree");
     E.explorer_open = 0;
@@ -1456,6 +1458,10 @@ void editorHandleKeyPress(void) {
     }
     break;
 
+  case CTRL_KEY('h'):
+    editorSetStatusMessage(HELP_MESSAGE);
+    break;
+
   case CTRL_KEY('c'):
     editorSelectionCopy();
     break;
@@ -1469,7 +1475,6 @@ void editorHandleKeyPress(void) {
     break;
 
   case BACKSPACE:
-  case CTRL_KEY('h'):
   case DEL:
     if (E.selecting) {
       editorSelectionDelete();
@@ -1607,8 +1612,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-E = "
-                         "explorer | Ctrl-Q = quit");
+  editorSetStatusMessage(HELP_MESSAGE);
 
   while (1) {
     editorRefreshScreen();
